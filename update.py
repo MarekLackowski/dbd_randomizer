@@ -1,8 +1,3 @@
-"""Refreshes data.js and icons/ from dbd.tricky.lol (game data) and deadbydaylight.wiki.gg (icons).
-
-Run after a game patch:  python update.py
-Only icons that are not in icons/ yet get downloaded.
-"""
 import json, re, os, time, difflib, unicodedata, urllib.error, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -20,10 +15,10 @@ def get(url):
             return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300).read()
         except (urllib.error.URLError, TimeoutError) as e:
             if getattr(e, "code", 429) != 429 or not wait: raise
-            time.sleep(wait)  # wiki rate limit / slow tricky.lol
+            time.sleep(wait)
 
 def tricky(path):
-    for _ in range(5):  # tricky.lol sometimes cuts big responses short
+    for _ in range(5):
         try:
             return json.loads(get(TRICKY + path))
         except json.JSONDecodeError:
@@ -41,7 +36,7 @@ def render(p):
             vals = tun.get(key.split(".", 1)[1].lower())
             if not vals:
                 print("MISSING TUNABLE", p["name"], key); return "?"
-            return "<span class=t>" + fmt(vals[-1]) + "</span>"  # tier III
+            return "<span class=t>" + fmt(vals[-1]) + "</span>"
         if kind == "Keyword":
             return "<span class=k>" + re.sub(r"(?<=[a-z])(?=[A-Z])", " ", key) + "</span>"
         return "the <b>" + INPUT.get(key, key) + "</b>"
@@ -57,7 +52,6 @@ def wiki_files(prefix):
         cont = "&aicontinue=" + urllib.parse.quote(r["continue"]["aicontinue"])
 
 def page_images(titles):
-    """{requested title: (final title, [file titles on that page])}, following redirects (wiki uses British spelling)."""
     res = {}
     for t0 in titles:
         cont, t, files = "", t0, []
@@ -82,7 +76,6 @@ def file_urls(titles):
     return urls
 
 def match(items, files, strip):
-    # match by display name first, not asset name: game asset names drift (two Teamwork icons are swapped in the dump)
     idx = {norm(re.sub(strip, "", k[:-4], flags=re.I)): u for k, u in files.items()}
     for x in items:
         keys = [norm(x["n"]), norm(x["n"].split(":")[-1]), norm(re.sub(strip, "", x["asset"], flags=re.I))]
@@ -90,25 +83,22 @@ def match(items, files, strip):
     return [x for x in items if not x["url"]]
 
 def patch_tunables(perks, key, **values):
-    # ponytail: hand-filled values the API dump is missing; only applied while they are still missing
     if key in perks:
         tun = perks[key]["tunables"]
         for k, v in values.items():
             if k.lower() not in {t.lower() for t in tun}: tun[k] = v
 
-# --- perks
 def perks(d):
     return sorted(({"n": p["name"], "d": render(p), "asset": p["image"].rsplit("/", 1)[1]} for p in d.values()),
                   key=lambda p: p["n"].lower())
 
 patch = tricky("versions")["perks"]["version"]
 surv_raw, kill_raw = tricky("perks?role=survivor"), tricky("perks?role=killer")
-patch_tunables(surv_raw, "BoilOver", RequiredFallHeight=[1.25])  # in-game text
-patch_tunables(surv_raw, "WindowsOfOpportunity", VaultSpeed=[10])  # 10.2.0 patch notes
-patch_tunables(kill_raw, "Sloppy_Butcher", Duration=[90], **{"HemmorhageBoost%": [25]})  # wiki
+patch_tunables(surv_raw, "BoilOver", RequiredFallHeight=[1.25])
+patch_tunables(surv_raw, "WindowsOfOpportunity", VaultSpeed=[10])
+patch_tunables(kill_raw, "Sloppy_Butcher", Duration=[90], **{"HemmorhageBoost%": [25]})
 surv, kill = perks(surv_raw), perks(kill_raw)
 todo = match(surv + kill, wiki_files("IconPerks"), r"^.*?icons?Perks_")
-# newer perks use other file prefixes: take the icon from the perk's own page
 pages = page_images([p["n"] for p in todo])
 for p in todo:
     title, files = pages[p["n"]]
@@ -117,21 +107,17 @@ urls = file_urls([p["file"] for p in todo if p["file"]])
 for p in todo:
     p["url"] = urls.get(p["file"])
 
-# --- killers + add-ons
 addons_raw = tricky("addons?role=killer")
 killers = []
 for c in tricky("characters?role=killer").values():
     adds = [{"n": a["name"].strip(), "r": a["rarity"], "asset": a["image"].rsplit("/", 1)[1],
-             # game text is "flavour<br><br>effect": keep the effect only; game also joins sentences without a space
              "d": re.sub(r"\.(?=<b>|[A-Z])", ". ", a["description"].split("<br><br>", 1)[-1])}
             for a in addons_raw.values() if a["bloodweb"] and c["item"] in (a["parents"] or [])]
     killers.append({"n": c["name"], "asset": c["image"].rsplit("/", 1)[1], "a": adds})
-# portraits: wiki numbering differs from the game's (K05 vs K06), so key on the name part only
 strip_port = lambda f: norm(re.sub(r"^(T_UI_)?K\d+_|_Portrait(\.png)?$", "", f))
 ports = {strip_port(k): u for pre in ("K", "T_UI_K") for k, u in wiki_files(pre).items() if k.endswith("_Portrait.png")}
 for k in killers:
     k["url"] = ports.get(norm(k["n"])) or ports.get(strip_port(k["asset"]))
-# add-ons: match within the killer's own wiki page (names repeat across killers, e.g. Jump Rope), fuzzy for British spelling
 pages = page_images([k["n"] for k in killers])
 want = []
 for k in killers:
@@ -139,7 +125,7 @@ for k in killers:
              if re.match(r"File:.*?iconAddon", f, re.I)}
     for a in k["a"]:
         key = difflib.get_close_matches(norm(a["n"]), list(files), 1, 0.75) or difflib.get_close_matches(norm(re.sub(r"^.*?addons?_", "", a["asset"], flags=re.I)), list(files), 1, 0.75)
-        key = key or [f for f in files if f.startswith(norm(a["n"]))]  # wiki suffixes duplicates with the power name
+        key = key or [f for f in files if f.startswith(norm(a["n"]))]
         a["file"] = files[key[0]] if key else None
         want.append(a["file"])
 urls = file_urls([f for f in want if f])
@@ -147,14 +133,11 @@ all_adds = [a for k in killers for a in k["a"]]
 for a in all_adds:
     a["url"] = urls.get(a["file"])
 
-# --- download
 os.makedirs(ICONS, exist_ok=True)
 everything = surv + kill + killers + all_adds
 missing = [x["n"] for x in everything if not x["url"]]
 def dl(x):
-    # wiki file names are unique per icon (game asset names are not: two different jumpRope add-ons)
     name = urllib.parse.unquote(x["url"].split("?")[0].rsplit("/", 1)[1]) if x["url"] else ""
-    # ASCII-only file names (coupDeGrâce): safe for git and static hosts
     x["i"] = "icons/" + unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode() if name else ""
     path = os.path.join(out, x["i"])
     if x["url"] and not os.path.exists(path):
