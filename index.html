@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perk Roulette</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 30 16 16 30 2 16z' fill='%23120a1a' stroke='%23e0262d' stroke-width='2.5'/%3E%3Cpath d='M16 9 23 16 16 23 9 16z' fill='%23b3151b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07080a;
+  --text: #d9d6cf;
+  --muted: #8a8780;
+  --red: #b3151b;
+  --red-hi: #e0262d;
+  --gold: #e8c46a;
+  --panel: rgba(14, 14, 16, .88);
+  --line: rgba(255, 255, 255, .08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 "Roboto Condensed", Arial, sans-serif;
+  overflow-x: hidden;
+}
+[hidden] { display: none !important; }
+/* fog + vignette */
+body::before, body::after {
+  content: ""; position: fixed; inset: -20%; pointer-events: none; z-index: -1;
+}
+body::before {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(140, 10, 16, .35), transparent 70%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(60, 70, 90, .25), transparent 70%),
+    radial-gradient(ellipse at center, transparent 40%, #000 95%);
+}
+body::after {
+  background:
+    radial-gradient(ellipse 40% 20% at 20% 60%, rgba(200, 200, 220, .06), transparent 70%),
+    radial-gradient(ellipse 50% 25% at 80% 40%, rgba(200, 200, 220, .05), transparent 70%),
+    radial-gradient(ellipse 35% 18% at 50% 85%, rgba(200, 200, 220, .07), transparent 70%);
+  animation: fog 40s ease-in-out infinite alternate;
+}
+@keyframes fog { to { transform: translate3d(6%, -3%, 0) scale(1.1); } }
+
+/* role switch */
+/* segmented, angled like the in-game menu tabs; ::before is the sliding red indicator */
+.role {
+  --cut: 12px;
+  position: absolute; top: 16px; right: 16px; z-index: 5;
+  display: grid; grid-template-columns: 1fr 1fr; padding: 4px;
+  background: linear-gradient(180deg, #19171b, #0c0b0d);
+  clip-path: polygon(var(--cut) 0, 100% 0, calc(100% - var(--cut)) 100%, 0 100%);
+  filter: drop-shadow(0 6px 16px #000);
+}
+.role::before {
+  content: ""; grid-area: 1 / 1; z-index: 0;
+  background: linear-gradient(180deg, #c3181f, #6e0b0f);
+  clip-path: polygon(var(--cut) 0, 100% 0, calc(100% - var(--cut)) 100%, 0 100%);
+  transition: transform .3s cubic-bezier(.6, 0, .3, 1);
+}
+.role[data-role="killer"]::before { transform: translateX(100%); }
+.role button {
+  grid-row: 1; z-index: 1;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 7px 20px 7px 18px; border: 0; background: none;
+  font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+  color: #7d7980; transition: color .2s;
+}
+.role button:first-of-type { grid-column: 1; }
+.role button:last-child { grid-column: 2; }
+.role button:hover { color: #e9e4da; }
+.role button[aria-pressed="true"] { color: #fff; }
+.role button img { width: 24px; height: 24px; opacity: .5; transition: opacity .2s, transform .2s; }
+.role button:hover img { opacity: .85; }
+.role button[aria-pressed="true"] img { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 4px rgba(0, 0, 0, .8)); }
+
+header { text-align: center; padding: 84px 16px 8px; } /* top room for the role switch */
+h1 {
+  margin: 0;
+  font: 900 clamp(28px, 6vw, 56px)/1 "Cinzel", serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #e9e4da;
+  text-shadow: 0 0 24px rgba(179, 21, 27, .6), 0 2px 0 #000;
+}
+h1 span:last-child { color: var(--red-hi); }
+.rule { width: min(420px, 70%); height: 1px; margin: 18px auto 0; background: linear-gradient(90deg, transparent, var(--red), transparent); }
+
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+
+.loadout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(30, 28, 30, .85), var(--panel));
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--red);
+  padding: 22px 18px 20px;
+  min-height: 360px;
+  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+}
+
+/* in-game style perk diamond (very rare / tier III) */
+.diamond {
+  --s: 132px;
+  position: relative; width: var(--s); height: var(--s);
+  display: grid; place-items: center; flex: none;
+}
+.diamond::before {
+  content: ""; position: absolute; inset: 15%;
+  transform: rotate(45deg);
+  background: radial-gradient(circle at 50% 40%, #6b3a8f, #3a1d55 60%, #1d0f2c);
+  border: 2px solid #a67cc9;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, .7), 0 0 0 3px #120a1a, 0 0 22px rgba(130, 70, 180, .35);
+}
+.diamond img { position: relative; width: 88%; height: 88%; object-fit: contain; filter: drop-shadow(0 2px 2px #000); }
+.diamond.empty::before { background: #151417; border-color: #2c2a2f; box-shadow: inset 0 0 18px #000; }
+.spin img { filter: blur(1px) brightness(.8); }
+.land { animation: land .45s ease-out; }
+@keyframes land {
+  0% { transform: scale(1.18); filter: brightness(2); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+/* not rolled yet */
+.unknown img { visibility: hidden; }
+.unknown::after {
+  content: "?"; position: absolute; inset: 0; display: grid; place-items: center;
+  font: 900 54px/1 "Cinzel", serif; color: rgba(233, 228, 218, .28); text-shadow: 0 2px 6px #000;
+}
+.diamond.unknown::before { background: radial-gradient(circle at 50% 40%, #241d2a, #120f15 70%); border-color: #3a3340; box-shadow: inset 0 0 18px #000, 0 0 0 3px #0c0b0d; }
+.square.unknown { --c: #2a272d; }
+.square.unknown::after { font-size: 40px; }
+.portrait.unknown::after { font-size: 96px; }
+
+.name {
+  margin: 14px 0 10px;
+  font: 700 19px/1.15 "Roboto Condensed", sans-serif;
+  text-transform: uppercase; letter-spacing: .04em; text-align: center;
+  color: #f1ece2; min-height: 2.3em; display: flex; align-items: center;
+}
+.desc { font-size: 14px; color: #bdb8ae; width: 100%; }
+.desc ul { margin: 6px 0; padding-left: 18px; }
+.desc li { margin: 3px 0; }
+.desc > li { margin-left: 18px; } /* some game texts have <li> without <ul> */
+.desc b { color: #e9e4da; }
+.desc .t { color: var(--gold); font-weight: 700; }
+.desc .k { color: var(--red-hi); font-weight: 700; }
+.card.hidden .name, .card.hidden .desc { opacity: 0; }
+.card .name, .card .desc { transition: opacity .3s; }
+.reroll {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; padding: 0;
+  font-size: 17px; line-height: 1; color: var(--muted);
+  background: none; border: 0; opacity: .25;
+  transition: opacity .2s, color .2s, transform .3s;
+}
+.card:hover .reroll { opacity: .6; }
+.reroll:hover { opacity: 1; color: var(--red-hi); transform: rotate(180deg); }
+.reroll:disabled { visibility: hidden; }
+
+/* killer + add-ons row */
+.krow { display: flex; justify-content: center; gap: 18px; margin-bottom: 18px; }
+.krow .card { flex: 1 1 0; max-width: 380px; min-height: 0; }
+.portrait { position: relative; width: 170px; height: 170px; flex: none; }
+.portrait img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px #000); }
+.killer .name { min-height: 0; margin-bottom: 0; }
+/* killer picker */
+.kpick { position: relative; margin-top: 14px; width: 100%; max-width: 260px; }
+.kpick > button, .kmenu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 4px 10px 4px 4px; text-align: left; color: var(--text);
+  font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.kpick > button { background: #141316; border: 1px solid #36333a; border-left: 2px solid var(--red); font-size: 17px; }
+.kpick > button:hover, .kpick.open > button { border-color: var(--red); }
+.kpick > button::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .2s; }
+.kpick.open > button::after { transform: rotate(180deg); }
+.kpick img { width: 40px; height: 40px; object-fit: contain; flex: none; background: radial-gradient(circle, #2a2226, #111 70%); }
+.kmenu {
+  position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 4px);
+  max-height: 340px; overflow-y: auto; padding: 4px;
+  background: #0f0e11; border: 1px solid #36333a; border-top: 2px solid var(--red);
+  box-shadow: 0 18px 40px #000; scrollbar-width: thin; scrollbar-color: #3a3640 transparent;
+}
+.kmenu button { background: none; border: 0; font-size: 14px; color: #bdb8ae; }
+.kmenu button img { width: 34px; height: 34px; }
+.kmenu button:hover, .kmenu button:focus-visible { background: #1d1a1f; color: #fff; outline: none; }
+.kmenu button[aria-selected="true"] { color: var(--red-hi); }
+.addon .desc { font-size: 13px; }
+.square {
+  --c: #6b3a8f;
+  position: relative; width: 84px; height: 84px; flex: none;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--c) 85%, #fff 15%), color-mix(in srgb, var(--c) 55%, #000) 75%);
+  border: 2px solid color-mix(in srgb, var(--c) 70%, #fff 30%);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, .7), 0 0 0 3px #0c0b0d, 0 0 18px color-mix(in srgb, var(--c) 40%, transparent);
+}
+.square img { width: 92%; height: 92%; object-fit: contain; filter: drop-shadow(0 2px 2px #000); }
+.square.common { --c: #6e5236; }
+.square.uncommon { --c: #a8902c; }
+.square.rare { --c: #3c7a32; }
+.square.veryrare { --c: #6b3a8f; }
+.square.visceral { --c: #b0164a; }
+.addon .name { font-size: 16px; }
+
+.actions { display: flex; justify-content: center; gap: 14px; margin-top: 34px; flex-wrap: wrap; }
+button { font: inherit; cursor: pointer; }
+.roll {
+  position: relative;
+  padding: 16px 64px;
+  font: 900 22px/1 "Cinzel", serif; letter-spacing: .14em; text-transform: uppercase;
+  color: #fff; background: linear-gradient(180deg, #c3181f, #6e0b0f);
+  border: 1px solid #ff4a50; border-radius: 0;
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  box-shadow: 0 0 30px rgba(179, 21, 27, .45);
+  transition: filter .15s, transform .1s;
+}
+.roll:hover { filter: brightness(1.15); }
+.roll:active { transform: scale(.97); }
+.roll:disabled { filter: grayscale(.6) brightness(.7); cursor: default; }
+.ghost {
+  padding: 14px 26px;
+  text-transform: uppercase; letter-spacing: .1em; font-weight: 700;
+  color: var(--text); background: rgba(20, 20, 22, .8);
+  border: 1px solid #3a383c;
+}
+.ghost:hover { border-color: var(--red); color: #fff; }
+.ghost span { color: var(--gold); }
+
+footer {
+  max-width: 760px; margin: 0 auto; padding: 0 16px 28px;
+  text-align: center; font-size: 12px; line-height: 1.6; color: #5c5960;
+}
+footer b { color: var(--muted); font-weight: 700; letter-spacing: .06em; }
+footer a { color: inherit; }
+footer a:hover { color: var(--text); }
+
+/* killer options */
+.opts { display: flex; justify-content: center; gap: 22px; margin-top: 16px; }
+.opts label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted);
+}
+.opts label:hover { color: var(--text); }
+.opts input {
+  appearance: none; margin: 0; width: 12px; height: 12px; cursor: pointer;
+  border: 1px solid #555; transform: rotate(45deg); transition: background .15s, border-color .15s;
+}
+.opts input:checked { background: var(--red-hi); border-color: var(--red-hi); }
+
+/* perk pool */
+dialog {
+  width: min(1100px, calc(100% - 32px)); max-height: calc(100% - 48px);
+  padding: 0; color: var(--text);
+  background: #0d0d0f; border: 1px solid #2a282c; border-top: 2px solid var(--red);
+  box-shadow: 0 30px 80px #000;
+}
+dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
+.bar {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 14px 16px; background: #0d0d0f; border-bottom: 1px solid var(--line);
+}
+.bar h2 { margin: 0 auto 0 0; font: 700 20px "Cinzel", serif; letter-spacing: .08em; }
+.bar h2 span { color: var(--gold); font-family: "Roboto Condensed", sans-serif; }
+.bar input {
+  flex: 1 1 180px; max-width: 260px; padding: 9px 12px; font: inherit;
+  color: var(--text); background: #18171a; border: 1px solid #333; outline: none;
+}
+.bar input:focus { border-color: var(--red); }
+.bar button { padding: 9px 14px; }
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px; padding: 16px;
+}
+.pick {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 2px; background: none; border: 1px solid transparent; color: var(--text);
+  font-size: 12px; line-height: 1.15; text-align: center;
+}
+.pick:hover { border-color: #333; background: #141316; }
+.pick .diamond { --s: 72px; }
+.pick.off { color: #555; }
+.pick.off .diamond { filter: grayscale(1) brightness(.35); }
+.pick.off .diamond::after {
+  content: ""; position: absolute; inset: 28%;
+  background:
+    linear-gradient(45deg, transparent 45%, var(--red-hi) 45% 55%, transparent 55%),
+    linear-gradient(-45deg, transparent 45%, var(--red-hi) 45% 55%, transparent 55%);
+}
+
+@media (max-width: 900px) { .loadout { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .krow { flex-direction: column; align-items: stretch; } .krow .card { max-width: none; } }
+@media (max-width: 520px) {
+  .loadout { grid-template-columns: minmax(0, 1fr); }
+  .card { min-height: 0; }
+  .roll { padding: 16px 40px; }
+}
+</style>
+</head>
+<body>
+<nav class="role" aria-label="Role">
+  <button data-role="surv"><img src="icons/role_survivor.png" alt="">Survivor</button>
+  <button data-role="killer"><img src="icons/role_killer.png" alt="">Killer</button>
+</nav>
+
+<header>
+  <h1><span id="title1">Perk</span> <span>Roulette</span></h1>
+  <div class="rule"></div>
+</header>
+
+<main>
+  <section class="krow" id="krow" hidden></section>
+  <section class="loadout" id="loadout"></section>
+  <div class="actions">
+    <button class="roll" id="roll">Roll</button>
+    <button class="ghost" id="pool">Perk pool <span id="count"></span></button>
+  </div>
+  <div class="opts" id="opts" hidden>
+    <label><input type="checkbox" id="optKiller"> Killer</label>
+    <label><input type="checkbox" id="optAddons"> Add-ons</label>
+  </div>
+</main>
+
+<footer>
+  <b>PATCH <span id="patch"></span></b><br>
+  Dead by Daylight, its icons, artwork and game text are trademarks and property of Behaviour Interactive Inc.
+  This is an unofficial fan project, not affiliated with or endorsed by Behaviour Interactive.
+  Data: <a href="https://dbd.tricky.lol" target="_blank" rel="noopener">dbd.tricky.lol</a> ·
+  Icons: <a href="https://deadbydaylight.wiki.gg" target="_blank" rel="noopener">Dead by Daylight Wiki</a>
+</footer>
+
+<dialog id="dlg">
+  <div class="bar">
+    <h2>Perk pool <span id="count2"></span></h2>
+    <input id="search" type="search" placeholder="Search…" aria-label="Search perks">
+    <button class="ghost" id="all">All</button>
+    <button class="ghost" id="none">None</button>
+    <button class="ghost" id="close">Close</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</dialog>
+
+<script src="data.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const rnd = a => a[Math.floor(Math.random() * a.length)];
+const store = {
+  get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+let role = store.get("dbd-role", "surv");
+const opts = store.get("dbd-kopts", { killer: true, addons: true, pick: 0 });
+const excluded = {
+  surv: new Set(store.get("dbd-excluded", [])),
+  killer: new Set(store.get("dbd-excluded-killer", [])),
+};
+const perksOf = () => role === "surv" ? SURV : KILL;
+const ex = () => excluded[role];
+const pool = () => perksOf().filter(p => !ex().has(p.n));
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// a slot = card with an icon box, name and (optional) description
+function slot(parent, cls, iconHtml, onReroll) {
+  const card = document.createElement("article");
+  card.className = "card hidden " + cls;
+  card.innerHTML = iconHtml + '<div class="name"></div><div class="desc"></div><button class="reroll" title="Reroll" aria-label="Reroll">↻</button>';
+  parent.append(card);
+  const s = { card, item: null, box: card.firstElementChild, img: card.querySelector("img"), name: card.querySelector(".name"),
+              desc: card.querySelector(".desc"), btn: card.querySelector(".reroll") };
+  s.btn.onclick = onReroll;
+  return s;
+}
+
+const perkSlots = [0, 1, 2, 3].map(i => slot($("loadout"), "", '<div class="diamond empty"><img alt=""></div>', () => rerollPerk(i)));
+const killerSlot = slot($("krow"), "killer", '<div class="portrait"><img alt=""></div>', rerollKiller);
+const addonSlots = [0, 1].map(i => slot($("krow"), "addon", '<div class="square"><img alt=""></div>', () => rerollAddon(i)));
+killerSlot.desc.remove();
+// custom killer picker (shown when killer roll is off)
+const select = document.createElement("div");
+select.className = "kpick";
+select.innerHTML = '<button aria-haspopup="listbox"><img alt=""><span></span></button><div class="kmenu" role="listbox" hidden></div>';
+const [kbtn, kmenu] = select.children;
+KILLERS.forEach((k, i) => {
+  const b = document.createElement("button");
+  b.setAttribute("role", "option");
+  b.innerHTML = `<img loading="lazy" src="${k.i}" alt=""><span></span>`;
+  b.lastChild.textContent = k.n;
+  b.onclick = () => { toggleMenu(false); pickKiller(i); };
+  kmenu.append(b);
+});
+function toggleMenu(open) {
+  kmenu.hidden = !open;
+  select.classList.toggle("open", open);
+  if (open) kmenu.scrollTop = kmenu.children[opts.pick].offsetTop - kmenu.clientHeight / 2;
+}
+kbtn.onclick = () => toggleMenu(kmenu.hidden);
+document.addEventListener("click", e => { if (!select.contains(e.target)) toggleMenu(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") toggleMenu(false); });
+killerSlot.card.append(select);
+
+// spins slot s and lands on item; resolves when landed
+function spin(s, item, ms, flicker, show = x => {}) {
+  s.item = item;
+  s.btn.disabled = true;
+  s.card.classList.add("hidden");
+  s.box.classList.remove("land", "empty", "unknown");
+  if (!item) { s.box.classList.add("empty"); s.img.removeAttribute("src"); return Promise.resolve(); }
+  s.box.classList.add("spin");
+  const t = setInterval(() => { const f = rnd(flicker); s.img.src = f.i; show(f, true); }, 70);
+  return new Promise(done => setTimeout(() => {
+    clearInterval(t);
+    if (s.item !== item) return done(); // slot was re-spun meanwhile
+    s.img.src = item.i; s.img.alt = item.n;
+    s.name.textContent = item.n;
+    if (item.d) s.desc.innerHTML = item.d;
+    show(item);
+    s.box.classList.remove("spin");
+    void s.box.offsetWidth; // restart animation
+    s.box.classList.add("land");
+    s.card.classList.remove("hidden");
+    s.btn.disabled = false;
+    done();
+  }, ms));
+}
+
+const rarity = (s) => (a, flicker) => { s.box.className = "square " + a.r + (flicker ? " spin" : ""); };
+
+function spinAddons(killer, delay) {
+  if (!opts.addons) return [];
+  const two = shuffle(killer.a.slice()).slice(0, 2);
+  return addonSlots.map((s, i) => spin(s, two[i], delay + i * 300, killer.a, rarity(s)));
+}
+
+async function roll() {
+  const avail = pool();
+  const pick = shuffle(avail.slice()).slice(0, 4);
+  const spins = perkSlots.map((s, i) => spin(s, pick[i], 900 + i * 350, avail));
+  if (role === "killer") {
+    const k = opts.killer ? rnd(KILLERS) : KILLERS[opts.pick];
+    spins.push(opts.killer ? spin(killerSlot, k, 900, KILLERS) : (showKiller(k), Promise.resolve()));
+    spins.push(...spinAddons(k, opts.killer ? 1100 : 600));
+  }
+  $("roll").disabled = true;
+  await Promise.all(spins);
+  $("roll").disabled = false;
+}
+
+// back to the "?" state; a hand-picked killer is shown right away
+function reset() {
+  for (const s of [...perkSlots, killerSlot, ...addonSlots]) {
+    s.item = null;
+    s.btn.disabled = true;
+    s.card.classList.add("hidden");
+    s.box.classList.remove("land", "spin", "empty");
+    s.box.classList.add("unknown");
+    s.img.removeAttribute("src");
+  }
+  addonSlots.forEach(s => s.box.className = "square unknown");
+  if (!opts.killer) showKiller(KILLERS[opts.pick]);
+}
+
+function showKiller(k) {
+  killerSlot.item = k;
+  killerSlot.box.classList.remove("unknown");
+  killerSlot.img.src = k.i; killerSlot.img.alt = k.n;
+  killerSlot.name.textContent = k.n;
+  killerSlot.card.classList.remove("hidden");
+  killerSlot.btn.disabled = false;
+}
+
+function rerollPerk(i) {
+  const taken = new Set(perkSlots.map(s => s.item && s.item.n));
+  const avail = pool().filter(p => !taken.has(p.n));
+  if (avail.length) spin(perkSlots[i], rnd(avail), 700, avail);
+}
+
+function rerollKiller() {
+  const k = rnd(KILLERS.filter(k => k !== killerSlot.item));
+  spin(killerSlot, k, 700, KILLERS);
+  spinAddons(k, 900);
+}
+
+function rerollAddon(i) {
+  const k = killerSlot.item;
+  const other = addonSlots[1 - i].item;
+  const avail = k.a.filter(a => a !== other && a !== addonSlots[i].item);
+  spin(addonSlots[i], rnd(avail), 700, avail, rarity(addonSlots[i]));
+}
+
+// perk pool dialog
+let picks = [];
+function buildPool() {
+  $("grid").textContent = "";
+  $("search").value = "";
+  picks = perksOf().map(p => {
+    const b = document.createElement("button");
+    b.className = "pick";
+    b.title = p.n;
+    b.innerHTML = `<div class="diamond"><img loading="lazy" src="${p.i}" alt=""></div><span></span>`;
+    b.lastChild.textContent = p.n;
+    b.onclick = () => { ex().has(p.n) ? ex().delete(p.n) : ex().add(p.n); refresh(); };
+    $("grid").append(b);
+    return [p, b];
+  });
+  refresh();
+}
+
+function refresh() {
+  picks.forEach(([p, b]) => b.classList.toggle("off", ex().has(p.n)));
+  const all = perksOf().length;
+  $("count").textContent = $("count2").textContent = `${all - ex().size}/${all}`;
+  store.set(role === "surv" ? "dbd-excluded" : "dbd-excluded-killer", [...ex()]);
+}
+
+function applyOpts() {
+  $("optKiller").checked = opts.killer;
+  $("optAddons").checked = opts.addons;
+  const k = KILLERS[opts.pick];
+  kbtn.firstChild.src = k.i;
+  kbtn.lastChild.textContent = k.n;
+  [...kmenu.children].forEach((b, i) => b.setAttribute("aria-selected", i === opts.pick));
+  select.hidden = opts.killer;
+  killerSlot.name.hidden = !opts.killer;
+  killerSlot.btn.hidden = !opts.killer;
+  addonSlots.forEach(s => s.card.hidden = !opts.addons);
+  store.set("dbd-kopts", opts);
+}
+
+function setRole(r) {
+  role = r;
+  store.set("dbd-role", r);
+  document.querySelectorAll(".role button").forEach(b => b.setAttribute("aria-pressed", b.dataset.role === r));
+  document.querySelector(".role").dataset.role = r;
+  $("title1").textContent = r === "surv" ? "Perk" : "Killer";
+  $("krow").hidden = $("opts").hidden = r === "surv";
+  buildPool();
+  reset();
+}
+
+$("optKiller").onchange = e => {
+  opts.killer = e.target.checked; applyOpts();
+  // keep add-ons matching the shown killer; before the first roll they stay "?"
+  if (!opts.killer && killerSlot.item !== KILLERS[opts.pick]) addonSlots[0].item ? pickKiller(opts.pick) : showKiller(KILLERS[opts.pick]);
+};
+$("optAddons").onchange = e => {
+  opts.addons = e.target.checked; applyOpts();
+  if (opts.addons && killerSlot.item) spinAddons(killerSlot.item, 600);
+};
+function pickKiller(i) {
+  opts.pick = i; applyOpts();
+  showKiller(KILLERS[i]);
+  spinAddons(KILLERS[i], 600);
+}
+document.querySelectorAll(".role button").forEach(b => b.onclick = () => b.dataset.role !== role && setRole(b.dataset.role));
+$("search").oninput = e => {
+  const q = e.target.value.trim().toLowerCase();
+  picks.forEach(([p, b]) => b.hidden = q && !p.n.toLowerCase().includes(q));
+};
+$("all").onclick = () => { ex().clear(); refresh(); };
+$("none").onclick = () => { perksOf().forEach(p => ex().add(p.n)); refresh(); };
+$("pool").onclick = () => $("dlg").showModal();
+$("close").onclick = () => $("dlg").close();
+$("dlg").onclick = e => { if (e.target === $("dlg")) $("dlg").close(); };
+$("roll").onclick = roll;
+
+$("patch").textContent = PATCH;
+applyOpts();
+setRole(role);
+</script>
+</body>
+</html>
