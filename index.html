@@ -158,7 +158,7 @@ main {
 .desc b { color: #e9e4da; }
 .desc .t { color: var(--gold); font-weight: 700; }
 .desc .k { color: var(--red-hi); font-weight: 700; }
-.card.hidden .name, .card.hidden .desc { opacity: 0; }
+.card.hidden .name, .card.hidden .desc { opacity: 0; transition: none; }
 .card .name, .card .desc { transition: opacity .3s; }
 .reroll {
   position: absolute; top: 8px; right: 8px;
@@ -392,7 +392,6 @@ function shuffle(a) {
   return a;
 }
 
-// a slot = card with an icon box, name and (optional) description
 function slot(parent, cls, iconHtml, onReroll) {
   const card = document.createElement("article");
   card.className = "card hidden " + cls;
@@ -408,7 +407,6 @@ const perkSlots = [0, 1, 2, 3].map(i => slot($("loadout"), "", '<div class="diam
 const killerSlot = slot($("krow"), "killer", '<div class="portrait"><img alt=""></div>', rerollKiller);
 const addonSlots = [0, 1].map(i => slot($("krow"), "addon", '<div class="square"><img alt=""></div>', () => rerollAddon(i)));
 killerSlot.desc.remove();
-// custom killer picker (shown when killer roll is off)
 const select = document.createElement("div");
 select.className = "kpick";
 select.innerHTML = '<button aria-haspopup="listbox"><img alt=""><span></span></button><div class="kmenu" role="listbox" hidden></div>';
@@ -431,21 +429,42 @@ document.addEventListener("click", e => { if (!select.contains(e.target)) toggle
 document.addEventListener("keydown", e => { if (e.key === "Escape") toggleMenu(false); });
 killerSlot.card.append(select);
 
-// spins slot s and lands on item; resolves when landed
+const loaded = new Set();
+function preload(...lists) {
+  for (const x of lists.flat()) {
+    if (loaded.has(x.i)) continue;
+    const im = new Image();
+    im.onload = () => loaded.add(x.i);
+    im.src = x.i;
+  }
+}
+function decoded(src) {
+  const im = new Image();
+  im.src = src;
+  return im.decode().catch(() => {});
+}
+function stop(s) { clearInterval(s.t); clearTimeout(s.to); }
+
 function spin(s, item, ms, flicker, show = x => {}) {
+  stop(s);
   s.item = item;
   s.btn.disabled = true;
   s.card.classList.add("hidden");
   s.box.classList.remove("land", "empty", "unknown");
   if (!item) { s.box.classList.add("empty"); s.img.removeAttribute("src"); return Promise.resolve(); }
+  s.name.textContent = item.n;
+  s.desc.innerHTML = item.d || "";
+  const ready = decoded(item.i);
   s.box.classList.add("spin");
-  const t = setInterval(() => { const f = rnd(flicker); s.img.src = f.i; show(f, true); }, 70);
-  return new Promise(done => setTimeout(() => {
-    clearInterval(t);
+  s.t = setInterval(() => {
+    const f = rnd(flicker);
+    if (loaded.has(f.i)) { s.img.src = f.i; show(f, true); }
+  }, 70);
+  return new Promise(done => s.to = setTimeout(async () => {
+    clearInterval(s.t);
+    await ready;
     if (s.item !== item) return done();
     s.img.src = item.i; s.img.alt = item.n;
-    s.name.textContent = item.n;
-    if (item.d) s.desc.innerHTML = item.d;
     show(item);
     s.box.classList.remove("spin");
     void s.box.offsetWidth;
@@ -460,11 +479,14 @@ const rarity = (s) => (a, flicker) => { s.box.className = "square " + a.r + (fli
 
 function spinAddons(killer, delay) {
   if (!opts.addons) return [];
+  preload(killer.a);
   const two = shuffle(killer.a.slice()).slice(0, 2);
   return addonSlots.map((s, i) => spin(s, two[i], delay + i * 300, killer.a, rarity(s)));
 }
 
+let rollId = 0;
 async function roll() {
+  const id = ++rollId;
   const avail = pool();
   const pick = shuffle(avail.slice()).slice(0, 4);
   const spins = perkSlots.map((s, i) => spin(s, pick[i], 900 + i * 350, avail));
@@ -475,15 +497,19 @@ async function roll() {
   }
   $("roll").disabled = true;
   await Promise.all(spins);
-  $("roll").disabled = false;
+  if (id === rollId) $("roll").disabled = false;
 }
 
-// back to the "?" state; a hand-picked killer is shown right away
 function reset() {
+  rollId++;
+  $("roll").disabled = false;
   for (const s of [...perkSlots, killerSlot, ...addonSlots]) {
+    stop(s);
     s.item = null;
     s.btn.disabled = true;
     s.card.classList.add("hidden");
+    s.name.textContent = "";
+    s.desc.innerHTML = "";
     s.box.classList.remove("land", "spin", "empty");
     s.box.classList.add("unknown");
     s.img.removeAttribute("src");
@@ -493,6 +519,7 @@ function reset() {
 }
 
 function showKiller(k) {
+  stop(killerSlot);
   killerSlot.item = k;
   killerSlot.box.classList.remove("unknown");
   killerSlot.img.src = k.i; killerSlot.img.alt = k.n;
@@ -520,7 +547,6 @@ function rerollAddon(i) {
   spin(addonSlots[i], rnd(avail), 700, avail, rarity(addonSlots[i]));
 }
 
-// perk pool dialog
 let picks = [];
 function buildPool() {
   $("grid").textContent = "";
@@ -568,6 +594,7 @@ function setRole(r) {
   $("krow").hidden = $("opts").hidden = r === "surv";
   buildPool();
   reset();
+  preload(perksOf(), r === "killer" ? KILLERS : []);
 }
 
 $("optKiller").onchange = e => {
@@ -599,6 +626,7 @@ $("roll").onclick = roll;
 $("patch").textContent = PATCH;
 applyOpts();
 setRole(role);
+setTimeout(() => preload(SURV, KILL, KILLERS), 1500);
 </script>
 </body>
 </html>
