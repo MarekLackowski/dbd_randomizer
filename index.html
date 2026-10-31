@@ -338,9 +338,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
   <div class="actions">
     <button class="roll" id="roll">Roll</button>
     <button class="ghost" id="pool">Perk pool <span id="count"></span></button>
-    <div class="opts" id="opts" hidden>
-      <label><input type="checkbox" id="optKiller"> Killer</label>
-      <label><input type="checkbox" id="optAddons"> Add-ons</label>
+    <div class="opts" id="opts">
+      <label title="Skips dead combos, like two exhaustion perks"><input type="checkbox" id="optSmart"> Smart</label>
+      <label class="konly"><input type="checkbox" id="optKiller"> Killer</label>
+      <label class="konly"><input type="checkbox" id="optAddons"> Add-ons</label>
     </div>
   </div>
 </main>
@@ -366,6 +367,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
 </dialog>
 
 <script src="data.js"></script>
+<script src="rules.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const rnd = a => a[Math.floor(Math.random() * a.length)];
@@ -488,7 +490,7 @@ let rollId = 0;
 async function roll() {
   const id = ++rollId;
   const avail = pool();
-  const pick = shuffle(avail.slice()).slice(0, 4);
+  const pick = pickPerks(avail);
   const spins = perkSlots.map((s, i) => spin(s, pick[i], 900 + i * 350, avail));
   if (role === "killer") {
     const k = opts.killer ? rnd(KILLERS) : KILLERS[opts.pick];
@@ -529,9 +531,53 @@ function showKiller(k) {
   killerSlot.btn.disabled = false;
 }
 
+function ruleSet(r) {
+  const bad = new Map(), need = new Map();
+  const link = (a, b) => {
+    for (const [x, y] of [[a, b], [b, a]]) (bad.get(x) || bad.set(x, new Set()).get(x)).add(y);
+  };
+  RULES[r].oneOf.forEach(g => g.forEach(a => g.forEach(b => a !== b && link(a, b))));
+  RULES[r].conflicts.forEach(([a, list]) => list.forEach(b => link(a, b)));
+  RULES[r].requires.forEach(([a, list]) => need.set(a, new Set(list)));
+  return { bad, need };
+}
+const rules = { surv: ruleSet("surv"), killer: ruleSet("killer") };
+const smart = () => opts.smart !== false;
+
+function clash(names) {
+  const set = new Set(names), bad = rules[role].bad;
+  return names.some(n => bad.has(n) && [...bad.get(n)].some(b => set.has(b)));
+}
+function unmet(names) {
+  const need = rules[role].need;
+  return names.some(n => need.has(n) && !names.some(m => need.get(n).has(m)));
+}
+const valid = names => !clash(names) && !unmet(names);
+
+function pickPerks(avail) {
+  if (smart()) {
+    const names = new Set(avail.map(p => p.n)), need = rules[role].need;
+    const usable = avail.filter(p => !need.has(p.n) || [...need.get(p.n)].some(m => names.has(m)));
+    for (let t = 0; t < 300; t++) {
+      const pick = [];
+      for (const p of shuffle(usable.slice())) {
+        if (pick.length === 4) break;
+        if (!clash([...pick, p].map(x => x.n))) pick.push(p);
+      }
+      if (pick.length === Math.min(4, usable.length) && valid(pick.map(x => x.n))) return pick;
+    }
+  }
+  return shuffle(avail.slice()).slice(0, 4);
+}
+
 function rerollPerk(i) {
   const taken = new Set(perkSlots.map(s => s.item && s.item.n));
-  const avail = pool().filter(p => !taken.has(p.n));
+  const others = perkSlots.filter((s, j) => j !== i && s.item).map(s => s.item.n);
+  let avail = pool().filter(p => !taken.has(p.n));
+  if (smart()) {
+    const ok = avail.filter(p => valid([...others, p.n]));
+    if (ok.length) avail = ok;
+  }
   if (avail.length) spin(perkSlots[i], rnd(avail), 700, avail);
 }
 
@@ -573,6 +619,7 @@ function refresh() {
 }
 
 function applyOpts() {
+  $("optSmart").checked = smart();
   $("optKiller").checked = opts.killer;
   $("optAddons").checked = opts.addons;
   const k = KILLERS[opts.pick];
@@ -592,7 +639,8 @@ function setRole(r) {
   document.querySelectorAll(".role button").forEach(b => b.setAttribute("aria-pressed", b.dataset.role === r));
   document.querySelector(".role").dataset.role = r;
   $("title1").textContent = r === "surv" ? "Perk" : "Killer";
-  $("krow").hidden = $("opts").hidden = r === "surv";
+  $("krow").hidden = r === "surv";
+  document.querySelectorAll(".konly").forEach(l => l.hidden = r === "surv");
   buildPool();
   reset();
   preload(perksOf(), r === "killer" ? KILLERS : []);
@@ -603,6 +651,7 @@ $("optKiller").onchange = e => {
 
   if (!opts.killer && killerSlot.item !== KILLERS[opts.pick]) addonSlots[0].item ? pickKiller(opts.pick) : showKiller(KILLERS[opts.pick]);
 };
+$("optSmart").onchange = e => { opts.smart = e.target.checked; applyOpts(); };
 $("optAddons").onchange = e => {
   opts.addons = e.target.checked; applyOpts();
   if (opts.addons && killerSlot.item) spinAddons(killerSlot.item, 600);

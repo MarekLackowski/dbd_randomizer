@@ -152,6 +152,25 @@ data = {
     "KILL": [pick(p, "n", "d", "i") for p in kill],
     "KILLERS": [{"n": k["n"], "i": k["i"], "a": [pick(a, "n", "d", "r", "i") for a in k["a"]]} for k in killers],
 }
+def read_js(path):
+    if not os.path.exists(path): return {}
+    return {m[1]: json.loads(m[2]) for m in re.finditer(r"^const (\w+) = (.*?);$", open(path, encoding="utf8").read(), re.M | re.S)}
+
+old = read_js(os.path.join(out, "data.js"))
 js = "".join(f"const {k} = {json.dumps(v, ensure_ascii=False, indent=0)};\n" for k, v in data.items())
 open(os.path.join(out, "data.js"), "w", encoding="utf8").write(js)
-print("patch", patch, "|", len(surv), "surv perks,", len(kill), "killer perks,", len(killers), "killers,", len(all_adds), "add-ons; missing icons:", missing)
+print("patch", old.get("PATCH", "?"), "->", patch, "|", len(surv), "surv perks,", len(kill), "killer perks,", len(killers), "killers,", len(all_adds), "add-ons; missing icons:", missing)
+
+rules = read_js(os.path.join(out, "rules.js"))["RULES"]
+for role, key in (("surv", "SURV"), ("killer", "KILL")):
+    r = rules[role]
+    in_rules = {n for g in r["oneOf"] for n in g} | {n for a, lst in r["conflicts"] + r["requires"] for n in [a, *lst]}
+    before = {p["n"]: p["d"] for p in old.get(key, [])}
+    now = {p["n"]: p["d"] for p in data[key]}
+    if not before: continue
+    for label, names in (("NEW", now.keys() - before.keys()), ("REMOVED", before.keys() - now.keys()),
+                         ("CHANGED", {n for n in now.keys() & before.keys() if now[n] != before[n]})):
+        for n in sorted(names):
+            print(f"{role:6} {label:7} {n}" + ("   <- in rules.js" if n in in_rules else ""))
+    for n in sorted(in_rules - now.keys()):
+        print(f"{role:6} rules.js names a perk that does not exist: {n}")
