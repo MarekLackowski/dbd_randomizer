@@ -174,3 +174,14 @@ for role, key in (("surv", "SURV"), ("killer", "KILL")):
             print(f"{role:6} {label:7} {n}" + ("   <- in rules.js" if n in in_rules else ""))
     for n in sorted(in_rules - now.keys()):
         print(f"{role:6} rules.js names a perk that does not exist: {n}")
+
+old_adds = {(k["n"], a["n"]): a["d"] for k in old.get("KILLERS", []) for a in k["a"]}
+new_adds = {(k["n"], a["n"]): a["d"] for k in data["KILLERS"] for a in k["a"]}
+add_rules = {(k, n) for k, lst in rules["addons"].items() for a, names in lst for n in [a, *names]}
+if old_adds:
+    for label, keys in (("NEW", new_adds.keys() - old_adds.keys()), ("REMOVED", old_adds.keys() - new_adds.keys()),
+                        ("CHANGED", {x for x in new_adds.keys() & old_adds.keys() if new_adds[x] != old_adds[x]})):
+        for k, n in sorted(keys):
+            print(f"addon  {label:7} {k}: {n}" + ("   <- in rules.js" if (k, n) in add_rules else ""))
+for k, n in sorted(add_rules - new_adds.keys()):
+    print(f"addon  rules.js names an add-on that does not exist: {k}: {n}")

@@ -482,7 +482,7 @@ const rarity = (s) => (a, flicker) => { s.box.className = "square " + a.r + (fli
 function spinAddons(killer, delay) {
   if (!opts.addons) return [];
   preload(killer.a);
-  const two = shuffle(killer.a.slice()).slice(0, 2);
+  const two = pickAddons(killer);
   return addonSlots.map((s, i) => spin(s, two[i], delay + i * 300, killer.a, rarity(s)));
 }
 
@@ -570,6 +570,15 @@ function pickPerks(avail) {
   return shuffle(avail.slice()).slice(0, 4);
 }
 
+function addonClash(k, a, b) {
+  return (RULES.addons[k.n] || []).some(([x, list]) => (x === a.n && list.includes(b.n)) || (x === b.n && list.includes(a.n)));
+}
+function pickAddons(k) {
+  const s = shuffle(k.a.slice());
+  if (!smart()) return s.slice(0, 2);
+  return [s[0], s.find(a => a !== s[0] && !addonClash(k, s[0], a)) || s[1]];
+}
+
 function rerollPerk(i) {
   const taken = new Set(perkSlots.map(s => s.item && s.item.n));
   const others = perkSlots.filter((s, j) => j !== i && s.item).map(s => s.item.n);
@@ -590,7 +599,11 @@ function rerollKiller() {
 function rerollAddon(i) {
   const k = killerSlot.item;
   const other = addonSlots[1 - i].item;
-  const avail = k.a.filter(a => a !== other && a !== addonSlots[i].item);
+  let avail = k.a.filter(a => a !== other && a !== addonSlots[i].item);
+  if (smart() && other) {
+    const ok = avail.filter(a => !addonClash(k, a, other));
+    if (ok.length) avail = ok;
+  }
   spin(addonSlots[i], rnd(avail), 700, avail, rarity(addonSlots[i]));
 }
 
