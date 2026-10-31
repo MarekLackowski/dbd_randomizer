@@ -1,10 +1,9 @@
 const RULES = {
 "surv": {
-  "oneOf": [
-    ["Background Player", "Balanced Landing", "Dead Hard", "Dramaturgy", "Head On", "Lithe", "Overcome", "Smash Hit", "Sprint Burst"]
-  ],
+  "oneOf": [],
   "conflicts": [
-    ["No Mither", ["Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy", "Iron Will"]]
+    ["Sprint Burst", ["Background Player", "Balanced Landing", "Dead Hard", "Dramaturgy", "Head On", "Lithe", "Overcome", "Smash Hit"]],
+    ["No Mither", ["Adrenaline", "Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy", "Iron Will"]]
   ],
   "requires": [
     ["Ghost Notes", ["Background Player", "Balanced Landing", "Dead Hard", "Dramaturgy", "Head On", "Lithe", "Overcome", "Smash Hit", "Sprint Burst", "Rapid Response"]],
