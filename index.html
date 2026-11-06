@@ -114,6 +114,40 @@ main {
 }
 .loadout .card { min-height: clamp(260px, 40vh, 360px); }
 
+.plabel {
+  margin: 14px 0 6px; font-size: 12px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.plabel:first-child { margin-top: 0; }
+.multi .loadout .card {
+  min-height: 0; flex-direction: row; align-items: center; gap: 12px;
+  padding: 8px 36px 8px 8px; outline: none;
+}
+.multi .loadout .card:focus-visible { border-color: var(--red); }
+.multi .diamond { --s: clamp(56px, 7.5vh, 76px); }
+.multi .unknown::after { font-size: 30px; }
+.multi .loadout .name { margin: 0; min-height: 0; font-size: 16px; text-align: left; }
+.multi .loadout .desc {
+  position: absolute; z-index: 20; left: -1px; right: -1px; top: calc(100% + 6px);
+  padding: 12px 14px; font-size: 13px;
+  background: #121114; border: 1px solid #36333a; border-top: 2px solid var(--red);
+  box-shadow: 0 16px 40px #000;
+  visibility: hidden; opacity: 0; transition: opacity .15s, visibility .15s;
+}
+.multi .loadout.up .desc { top: auto; bottom: calc(100% + 6px); }
+.multi .loadout .card:not(.hidden):hover .desc,
+.multi .loadout .card:not(.hidden):focus-within .desc { visibility: visible; opacity: 1; }
+.multi .loadout .card:hover, .multi .loadout .card:focus-within { z-index: 21; }
+
+.pcount { display: flex; align-items: center; gap: 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.pcount button {
+  width: 22px; height: 22px; padding: 0; font-size: 12px; font-weight: 700;
+  color: var(--muted); background: none; border: 1px solid #3a383c;
+}
+.pcount button:first-child { margin-left: 6px; }
+.pcount button:hover { color: #fff; border-color: var(--red); }
+.pcount button[aria-pressed="true"] { color: #fff; background: var(--red); border-color: var(--red-hi); }
+
 .diamond {
   --s: clamp(80px, 13vh, 132px);
   position: relative; width: var(--s); height: var(--s);
@@ -334,11 +368,12 @@ dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
 
 <main>
   <section class="krow" id="krow" hidden></section>
-  <section class="loadout" id="loadout"></section>
+  <div id="players"></div>
   <div class="actions">
     <button class="roll" id="roll">Roll</button>
     <button class="ghost" id="pool">Perk pool <span id="count"></span></button>
     <div class="opts" id="opts">
+      <div class="pcount sonly" id="pcount">Players <button>1</button><button>2</button><button>3</button><button>4</button></div>
       <label title="Skips dead combos, like two exhaustion perks"><input type="checkbox" id="optSmart"> Smart</label>
       <label class="konly"><input type="checkbox" id="optKiller"> Killer</label>
       <label class="konly"><input type="checkbox" id="optAddons"> Add-ons</label>
@@ -405,7 +440,20 @@ function slot(parent, cls, iconHtml, onReroll) {
   return s;
 }
 
-const perkSlots = [0, 1, 2, 3].map(i => slot($("loadout"), "", '<div class="diamond empty"><img alt=""></div>', () => rerollPerk(i)));
+const rows = [0, 1, 2, 3].map(p => {
+  const label = document.createElement("div");
+  label.className = "plabel";
+  label.textContent = "Survivor " + (p + 1);
+  const sec = document.createElement("section");
+  sec.className = "loadout" + (p > 1 ? " up" : "");
+  $("players").append(label, sec);
+  const slots = [0, 1, 2, 3].map(i => slot(sec, "", '<div class="diamond empty"><img alt=""></div>', () => rerollPerk(p, i)));
+  slots.forEach(s => s.card.tabIndex = 0);
+  return { label, sec, slots };
+});
+const perkSlots = rows[0].slots;
+const playerCount = () => role === "surv" ? opts.players || 1 : 1;
+const activeRows = () => rows.slice(0, playerCount());
 const killerSlot = slot($("krow"), "killer", '<div class="portrait"><img alt=""></div>', rerollKiller);
 const addonSlots = [0, 1].map(i => slot($("krow"), "addon", '<div class="square"><img alt=""></div>', () => rerollAddon(i)));
 killerSlot.desc.remove();
@@ -490,8 +538,10 @@ let rollId = 0;
 async function roll() {
   const id = ++rollId;
   const avail = pool();
-  const pick = pickPerks(avail);
-  const spins = perkSlots.map((s, i) => spin(s, pick[i], 900 + i * 350, avail));
+  const spins = activeRows().flatMap((r, p) => {
+    const pick = pickPerks(avail);
+    return r.slots.map((s, i) => spin(s, pick[i], 900 + i * 350 + p * 150, avail));
+  });
   if (role === "killer") {
     const k = opts.killer ? rnd(KILLERS) : KILLERS[opts.pick];
     spins.push(opts.killer ? spin(killerSlot, k, 900, KILLERS) : (showKiller(k), Promise.resolve()));
@@ -505,7 +555,7 @@ async function roll() {
 function reset() {
   rollId++;
   $("roll").disabled = false;
-  for (const s of [...perkSlots, killerSlot, ...addonSlots]) {
+  for (const s of [...rows.flatMap(r => r.slots), killerSlot, ...addonSlots]) {
     stop(s);
     s.item = null;
     s.btn.disabled = true;
@@ -579,15 +629,24 @@ function pickAddons(k) {
   return [s[0], s.find(a => a !== s[0] && !addonClash(k, s[0], a)) || s[1]];
 }
 
-function rerollPerk(i) {
-  const taken = new Set(perkSlots.map(s => s.item && s.item.n));
-  const others = perkSlots.filter((s, j) => j !== i && s.item).map(s => s.item.n);
-  let avail = pool().filter(p => !taken.has(p.n));
+function rerollPerk(p, i) {
+  const slots = rows[p].slots;
+  const taken = new Set(slots.map(s => s.item && s.item.n));
+  const others = slots.filter((s, j) => j !== i && s.item).map(s => s.item.n);
+  let avail = pool().filter(x => !taken.has(x.n));
   if (smart()) {
-    const ok = avail.filter(p => valid([...others, p.n]));
+    const ok = avail.filter(x => valid([...others, x.n]));
     if (ok.length) avail = ok;
   }
-  if (avail.length) spin(perkSlots[i], rnd(avail), 700, avail);
+  if (avail.length) spin(slots[i], rnd(avail), 700, avail);
+}
+
+function applyPlayers() {
+  const n = playerCount();
+  rows.forEach((r, p) => r.sec.hidden = r.label.hidden = p >= n || n === 1);
+  rows[0].sec.hidden = false;
+  $("players").classList.toggle("multi", n > 1);
+  [...$("pcount").querySelectorAll("button")].forEach((b, i) => b.setAttribute("aria-pressed", i + 1 === (opts.players || 1)));
 }
 
 function rerollKiller() {
@@ -654,6 +713,8 @@ function setRole(r) {
   $("title1").textContent = r === "surv" ? "Perk" : "Killer";
   $("krow").hidden = r === "surv";
   document.querySelectorAll(".konly").forEach(l => l.hidden = r === "surv");
+  document.querySelectorAll(".sonly").forEach(l => l.hidden = r !== "surv");
+  applyPlayers();
   buildPool();
   reset();
   preload(perksOf(), r === "killer" ? KILLERS : []);
@@ -665,6 +726,13 @@ $("optKiller").onchange = e => {
   if (!opts.killer && killerSlot.item !== KILLERS[opts.pick]) addonSlots[0].item ? pickKiller(opts.pick) : showKiller(KILLERS[opts.pick]);
 };
 $("optSmart").onchange = e => { opts.smart = e.target.checked; applyOpts(); };
+$("pcount").querySelectorAll("button").forEach((b, i) => b.onclick = () => {
+  if ((opts.players || 1) === i + 1) return;
+  opts.players = i + 1;
+  applyOpts();
+  applyPlayers();
+  reset();
+});
 $("optAddons").onchange = e => {
   opts.addons = e.target.checked; applyOpts();
   if (opts.addons && killerSlot.item) spinAddons(killerSlot.item, 600);
