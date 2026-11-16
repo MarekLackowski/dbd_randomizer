@@ -3,7 +3,9 @@ const RULES = {
   "oneOf": [],
   "conflicts": [
     ["Sprint Burst", ["Background Player", "Balanced Landing", "Dead Hard", "Dramaturgy", "Head On", "Lithe", "Overcome", "Smash Hit"]],
-    ["No Mither", ["Adrenaline", "Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy", "Iron Will"]]
+    ["No Mither", ["Adrenaline", "Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy", "Iron Will"]],
+    ["Invocation: Treacherous Crows", ["Adrenaline", "Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy"]],
+    ["Invocation: Weaving Spiders", ["Adrenaline", "Self-Care", "Strength in Shadows", "Inner Strength", "Resurgence", "Road Life", "Solidarity", "Reactive Healing", "Second Wind", "Moment of Glory", "Clean Break", "Teamwork: Collective Stealth", "For the People", "Duty of Care", "Finesse", "Light-footed", "Dramaturgy"]]
   ],
   "requires": [
     ["Ghost Notes", ["Background Player", "Balanced Landing", "Dead Hard", "Dramaturgy", "Head On", "Lithe", "Overcome", "Smash Hit", "Sprint Burst", "Rapid Response"]],

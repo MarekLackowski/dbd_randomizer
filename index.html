@@ -539,7 +539,7 @@ async function roll() {
   const id = ++rollId;
   const avail = pool();
   const spins = activeRows().flatMap((r, p) => {
-    const pick = pickPerks(avail);
+    const pick = pickFresh(p, avail);
     return r.slots.map((s, i) => spin(s, pick[i], 900 + i * 350 + p * 150, avail));
   });
   if (role === "killer") {
@@ -629,16 +629,43 @@ function pickAddons(k) {
   return [s[0], s.find(a => a !== s[0] && !addonClash(k, s[0], a)) || s[1]];
 }
 
+const history = {};
+const recent = p => new Set((history[role + p] || []).flat());
+function remember(p, names, add) {
+  const h = history[role + p] || [];
+  if (add && h.length) h[0] = [...h[0], ...names];
+  else h.unshift(names);
+  history[role + p] = h.slice(0, 2);
+}
+
+function pickFresh(p, avail) {
+  let pick = null;
+  if (smart()) {
+    const rec = recent(p);
+    pick = pickPerks(avail.filter(x => !rec.has(x.n)));
+    if (pick.length < Math.min(4, avail.length) || !valid(pick.map(x => x.n))) pick = null;
+  }
+  pick = pick || pickPerks(avail);
+  remember(p, pick.map(x => x.n));
+  return pick;
+}
+
 function rerollPerk(p, i) {
   const slots = rows[p].slots;
   const taken = new Set(slots.map(s => s.item && s.item.n));
   const others = slots.filter((s, j) => j !== i && s.item).map(s => s.item.n);
   let avail = pool().filter(x => !taken.has(x.n));
   if (smart()) {
-    const ok = avail.filter(x => valid([...others, x.n]));
+    const rec = recent(p);
+    let ok = avail.filter(x => valid([...others, x.n]));
+    const fresh = ok.filter(x => !rec.has(x.n));
+    if (fresh.length) ok = fresh;
     if (ok.length) avail = ok;
   }
-  if (avail.length) spin(slots[i], rnd(avail), 700, avail);
+  if (!avail.length) return;
+  const pick = rnd(avail);
+  remember(p, [pick.n], true);
+  spin(slots[i], pick, 700, avail);
 }
 
 function applyPlayers() {
