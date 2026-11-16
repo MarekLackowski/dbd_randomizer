@@ -306,6 +306,21 @@ footer a:hover { color: var(--text); }
   border: 1px solid #555; transform: rotate(45deg); transition: background .15s, border-color .15s;
 }
 .opts input:checked { background: var(--red-hi); border-color: var(--red-hi); }
+.smartrow { display: flex; align-items: center; gap: 8px; }
+.info { position: relative; display: inline-flex; color: var(--muted); cursor: help; outline: none; }
+.info:hover, .info:focus-visible { color: #fff; }
+.tip {
+  position: absolute; z-index: 30; left: -12px; bottom: calc(100% + 10px);
+  width: 290px; padding: 12px 14px;
+  font-size: 13px; line-height: 1.45; text-transform: none; letter-spacing: 0; color: #bdb8ae;
+  background: #121114; border: 1px solid #36333a; border-top: 2px solid var(--red);
+  box-shadow: 0 16px 40px #000;
+  visibility: hidden; opacity: 0; transition: opacity .15s, visibility .15s;
+}
+.tip ul { margin: 0; padding-left: 16px; }
+.tip li + li { margin-top: 5px; }
+.info:hover .tip, .info:focus .tip { visibility: visible; opacity: 1; }
+@media (max-width: 700px) { .tip { left: auto; right: -12px; } }
 
 dialog {
   width: min(1100px, calc(100% - 32px)); max-height: calc(100% - 48px);
@@ -374,7 +389,21 @@ dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
     <button class="ghost" id="pool">Perk pool <span id="count"></span></button>
     <div class="opts" id="opts">
       <div class="pcount sonly" id="pcount">Players <button>1</button><button>2</button><button>3</button><button>4</button></div>
-      <label title="Skips dead combos, like two exhaustion perks"><input type="checkbox" id="optSmart"> Smart</label>
+      <div class="smartrow">
+        <label><input type="checkbox" id="optSmart"> Smart</label>
+        <span class="info" tabindex="0" aria-label="What Smart does">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="7.3" y="6.8" width="1.4" height="5.2" rx=".7" fill="currentColor"/><circle cx="8" cy="4.6" r=".95" fill="currentColor"/></svg>
+          <span class="tip" role="tooltip">
+            <ul>
+              <li>No dead combos, like Sprint Burst with other exhaustion perks</li>
+              <li>No self-healing or "while healthy" perks with No Mither or Invocations</li>
+              <li>Ghost Notes and Blood Rush only with an exhaustion perk</li>
+              <li>Killer add-ons that cancel each other never pair up</li>
+              <li>No perk repeats within 2 rolls</li>
+            </ul>
+          </span>
+        </span>
+      </div>
       <label class="konly"><input type="checkbox" id="optKiller"> Killer</label>
       <label class="konly"><input type="checkbox" id="optAddons"> Add-ons</label>
     </div>
