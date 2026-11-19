@@ -390,22 +390,26 @@ dialog::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
     <div class="opts" id="opts">
       <div class="pcount sonly" id="pcount">Players <button>1</button><button>2</button><button>3</button><button>4</button></div>
       <div class="smartrow">
-        <label><input type="checkbox" id="optSmart"> Smart</label>
+        <label><input type="checkbox" id="optSmart" autocomplete="off"> Smart</label>
         <span class="info" tabindex="0" aria-label="What Smart does">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="7.3" y="6.8" width="1.4" height="5.2" rx=".7" fill="currentColor"/><circle cx="8" cy="4.6" r=".95" fill="currentColor"/></svg>
           <span class="tip" role="tooltip">
-            <ul>
-              <li>No dead combos, like Sprint Burst with other exhaustion perks</li>
+            <ul class="sonly">
+              <li>Sprint Burst never comes with another exhaustion perk</li>
               <li>No self-healing or "while healthy" perks with No Mither or Invocations</li>
               <li>Ghost Notes and Blood Rush only with an exhaustion perk</li>
-              <li>Killer add-ons that cancel each other never pair up</li>
+              <li>No perk repeats within 2 rolls</li>
+            </ul>
+            <ul class="konly">
+              <li>No dead perk combos, like Lightborn with Shadowborn or Rapid Brutality with Beast of Prey</li>
+              <li>Add-ons that cancel each other never pair up, like Matchbox with Torn Bookmark or Begrimed Head with Rusty Head</li>
               <li>No perk repeats within 2 rolls</li>
             </ul>
           </span>
         </span>
       </div>
-      <label class="konly"><input type="checkbox" id="optKiller"> Killer</label>
-      <label class="konly"><input type="checkbox" id="optAddons"> Add-ons</label>
+      <label class="konly"><input type="checkbox" id="optKiller" autocomplete="off"> Killer</label>
+      <label class="konly"><input type="checkbox" id="optAddons" autocomplete="off"> Add-ons</label>
     </div>
   </div>
 </main>
@@ -581,22 +585,28 @@ async function roll() {
   if (id === rollId) $("roll").disabled = false;
 }
 
+function clear(s) {
+  stop(s);
+  s.item = null;
+  s.btn.disabled = true;
+  s.card.classList.add("hidden");
+  s.name.textContent = "";
+  s.desc.innerHTML = "";
+  s.img.alt = "";
+  s.box.classList.remove("land", "spin", "empty");
+  s.box.classList.add("unknown");
+  s.img.removeAttribute("src");
+}
+
+function clearAddons() {
+  addonSlots.forEach(s => { clear(s); s.box.className = "square unknown"; });
+}
+
 function reset() {
   rollId++;
   $("roll").disabled = false;
-  for (const s of [...rows.flatMap(r => r.slots), killerSlot, ...addonSlots]) {
-    stop(s);
-    s.item = null;
-    s.btn.disabled = true;
-    s.card.classList.add("hidden");
-    s.name.textContent = "";
-    s.desc.innerHTML = "";
-    s.img.alt = "";
-    s.box.classList.remove("land", "spin", "empty");
-    s.box.classList.add("unknown");
-    s.img.removeAttribute("src");
-  }
-  addonSlots.forEach(s => s.box.className = "square unknown");
+  [...rows.flatMap(r => r.slots), killerSlot].forEach(clear);
+  clearAddons();
   if (!opts.killer) showKiller(KILLERS[opts.pick]);
 }
 
@@ -777,9 +787,9 @@ function setRole(r) {
 }
 
 $("optKiller").onchange = e => {
-  opts.killer = e.target.checked; applyOpts();
-
-  if (!opts.killer && killerSlot.item !== KILLERS[opts.pick]) addonSlots[0].item ? pickKiller(opts.pick) : showKiller(KILLERS[opts.pick]);
+  opts.killer = e.target.checked;
+  applyOpts();
+  reset();
 };
 $("optSmart").onchange = e => { opts.smart = e.target.checked; applyOpts(); };
 $("pcount").querySelectorAll("button").forEach((b, i) => b.onclick = () => {
@@ -790,14 +800,16 @@ $("pcount").querySelectorAll("button").forEach((b, i) => b.onclick = () => {
   reset();
 });
 $("optAddons").onchange = e => {
-  opts.addons = e.target.checked; applyOpts();
-  if (opts.addons && killerSlot.item) spinAddons(killerSlot.item, 600);
+  opts.addons = e.target.checked;
+  applyOpts();
+  clearAddons();
 };
 function pickKiller(i) {
-  opts.pick = i; applyOpts();
-  showKiller(KILLERS[i]);
-  spinAddons(KILLERS[i], 600);
+  opts.pick = i;
+  applyOpts();
+  reset();
 }
+addEventListener("pageshow", applyOpts);
 document.querySelectorAll(".role button").forEach(b => b.onclick = () => b.dataset.role !== role && setRole(b.dataset.role));
 $("search").oninput = e => {
   const q = e.target.value.trim().toLowerCase();
